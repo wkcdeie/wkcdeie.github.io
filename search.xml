@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>UINavigationController中适配UIStatusBarStyle</title>
+    <url>/iOS/UINavigationController-adapter-UIStatusBarStyle/</url>
+    <content><![CDATA[<p>在页面结构使用UINavigationController时, 针对不同的界面使用其自定义<code>preferredStatusBarStyle</code>属性的适配。</p>
+<h1 id="古老时代"><a href="#古老时代" class="headerlink" title="古老时代"></a>古老时代</h1><figure class="highlight swift"><table><tr><td class="code"><pre><span class="line"><span class="keyword">open</span> <span class="function"><span class="keyword">func</span> <span class="title">setStatusBarStyle</span><span class="params">(<span class="number">_</span> statusBarStyle: UIStatusBarStyle, animated: Bool)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这个API是从iOS 2.0那个遥远的年代就已经存在的，通过它可以直接设置StatusBar的样式。不过现在都是iOS 13的新时代了，这个API已经在iOS 9之后就已经被Apple标记为<code>deprecated</code>了。</p>
+<a id="more"></a>
+<figure class="highlight swift"><table><tr><td class="code"><pre><span class="line"><span class="meta">@available</span>(iOS, introduced: <span class="number">2.0</span>, deprecated: <span class="number">9.0</span>, message: <span class="string">"Use -[UIViewController preferredStatusBarStyle]"</span>)</span><br><span class="line"><span class="keyword">open</span> <span class="function"><span class="keyword">func</span> <span class="title">setStatusBarStyle</span><span class="params">(<span class="number">_</span> statusBarStyle: UIStatusBarStyle, animated: Bool)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>当然了如果你喜欢，你也可以继续使用它。不过前提是你必须在<code>Info.plist</code>中增加一个<code>View controller-based status bar appearance</code>的配置项，值为<code>NO</code>。默认情况下这个配置项是没有的，默认值为<code>YES</code>。然后你就可以愉快的玩耍了（此次应该有👏）。</p>
+<p>如果你是个强迫症患者，面对满屏的deprecated警告，这样你还能忍（灵魂拷问）？当然了，你说我不在乎，拿起键盘就是干！那么恭喜你，为以后埋下了一颗编译级别的雷（😏）。别人下班出去约会妹子，而你还在一个人与bug为伴（凄凄惨惨）。</p>
+<h1 id="如何拯救"><a href="#如何拯救" class="headerlink" title="如何拯救"></a>如何拯救</h1><p>其实在iOS 7时代，苹果通过限制改变StatusBar的自由性，进而把控制权交给了UIViewController，每个界面都应该负责所属自己StatusBar的样式。这样一来，事情就变的简单多了。在UIViewController中重写<code>preferredStatusBarStyle</code>属性就能定义自己界面的StatusBar样式了。</p>
+<figure class="highlight swift"><table><tr><td class="code"><pre><span class="line"><span class="keyword">override</span> <span class="keyword">var</span> preferredStatusBarStyle: <span class="type">UIStatusBarStyle</span> &#123; <span class="keyword">return</span> .<span class="keyword">default</span> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>在应用运行时，由当前所展现的ViewController来决定StatusBar的样式。如果你没有重写此属性，那么默认值为<code>default</code>。但是，如果当前ViewController是由UINavigationController管理的时候，你会发现无论你如何更改此属性都不会有效果（心里默念mmp）。</p>
+<p>废话不多说，直接上代码。下面这段代码，是将StatusBar的样式交由当前UINavigationController的栈顶控制器负责。如果<code>topViewController</code>没有重写<code>preferredStatusBarStyle</code>属性，那么默认值就是<code>default</code>。</p>
+<figure class="highlight swift"><table><tr><td class="code"><pre><span class="line"><span class="keyword">open</span> <span class="keyword">override</span> <span class="keyword">var</span> preferredStatusBarStyle: <span class="type">UIStatusBarStyle</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">self</span>.topViewController?.preferredStatusBarStyle ?? .<span class="keyword">default</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个方案只适合自定义UINavigationController的时候。如果你没有自定义，直接使用UINavigationController，那么你也可以通过<code>UINavigationBar</code>的<code>barStyle</code>属性，来改变StatusBar的样式。这个不在本文讨论范围之内，不再细说。</p>
+<h1 id="例外"><a href="#例外" class="headerlink" title="例外"></a>例外</h1><p>如果你使用present方式来展现一个UINavigationController时，你会发现上述代码会有一点小问题。既不会使用当前present出来的ViewController的<code>preferredStatusBarStyle</code>。当然这种情况也必须是你自定义的UINavigationController，咱们直接上代码。</p>
+<figure class="highlight swift"><table><tr><td class="code"><pre><span class="line"><span class="keyword">open</span> <span class="keyword">override</span> <span class="keyword">var</span> preferredStatusBarStyle: <span class="type">UIStatusBarStyle</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">let</span> presentedViewController = <span class="keyword">self</span>.presentedViewController, <span class="keyword">let</span> vc = <span class="keyword">self</span>.visibleViewController, !presentedViewController.isBeingDismissed &#123;</span><br><span class="line">        <span class="keyword">return</span> vc.preferredStatusBarStyle</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">self</span>.topViewController?.preferredStatusBarStyle ?? .<span class="keyword">default</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只需要加一个判断条件，如果当前UINavigationController是使用present形式展现的，判断当前状态是Dismissed还是Presented。<br>如果是<code>Presented</code>状态，可以使用<code>visibleViewController</code>这个属性获取当前modal出来的ViewController，使用其preferredStatusBarStyle来管理StatusBar的样式。<br>如果是<code>Dismissed</code>状态，那使用<code>topViewController</code>的preferredStatusBarStyle来管理StatusBar的样式。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>如果使用自定义UINavigationController其使用present方式，需要<code>visibleViewController</code>+<code>topViewController</code>两者结合的方式适配。<br>如果只是单纯的使用自定义UINavigationController，只需要使用<code>topViewController</code>属性的方式适配。<br>如果你没有使用自定义UINavigationController，那么可以考虑使用<code>UINavigationBar</code>的<code>barStyle</code>属性的方式适配。</p>
+]]></content>
+      <categories>
+        <category>iOS</category>
+      </categories>
+      <tags>
+        <tag>UINavigationController</tag>
+        <tag>UIStatusBarStyle</tag>
+      </tags>
+  </entry>
+</search>
