@@ -6,7 +6,7 @@
   <link href="/atom.xml" rel="self"/>
   
   <link href="https://wkcdeie.github.io/"/>
-  <updated>2020-05-26T03:41:20.749Z</updated>
+  <updated>2020-07-02T08:40:09.882Z</updated>
   <id>https://wkcdeie.github.io/</id>
   
   <author>
@@ -15,6 +15,34 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>iOS-binary-rearrangement</title>
+    <link href="https://wkcdeie.github.io/iOS/iOS-binary-rearrangement/"/>
+    <id>https://wkcdeie.github.io/iOS/iOS-binary-rearrangement/</id>
+    <published>2020-06-27T03:50:47.000Z</published>
+    <updated>2020-07-02T08:40:09.882Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>启动是App给用户的第一印象，对用户体验至关重要。随着业务迭代迅速，如果放任不管，启动速度会一点点劣化。除了传统的修改业务代码方式，发现修改代码在二进制文件的布局可以提高启动性能。</p><h1 id="Page-Fault"><a href="#Page-Fault" class="headerlink" title="Page Fault"></a>Page Fault</h1><blockquote><p>当软件试图访问已映射在虚拟地址空间中，但是目前并未被加载在物理内存中的一个分页时，由中央处理器的内存管理单元所发出的中断。<br>通常情况下，用于处理此中断的程序是操作系统的一部分。如果操作系统判断此次访问是有效的，那么操作系统会尝试将相关的分页从硬盘上的虚拟内存文件中调入内存。而如果访问是不被允许的，那么操作系统通常会结束相关的进程。-摘自维基百科  </p></blockquote><p>编译器在按照默认顺序编译文件后的布局：<br><img src="/images/20200630-1414.png" alt="示例图"><br>其中绿色的method1和method3启动时候需要调用，为了执行对应的代码，系统必须进行两个Page Fault。<br>如果我们把method1和method3排列到一起，那么只需要一个Page Fault即可，这就是二进制文件重排的核心原理。<br><img src="/images/20200630-1417.png" alt="示例图"></p><h1 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h1><p>Xcode使用的链接器是<code>ld</code>，ld有一个不常用的参数<code>-order_file</code>，通过<code>man ld</code>可以看到详细文档：  </p><blockquote><p>Alters the order in which functions and data are laid out. For each section in the output file, any &gt;symbol in that section that are  specified in the order file file is moved to the start of its section and &gt;laid out in the same order as in the order file file.</p></blockquote><p>通过order_file文件可以告诉ld按照我们指定符号表的顺序去排列，二进制重排的关键就是order_file。那么如何获得自己主工程和三方库启动相关的符号表呢？通过pod导入第三库帮助我们完成收集order_file。</p><figure class="highlight ruby"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">target <span class="string">'you target'</span> <span class="keyword">do</span></span><br><span class="line">    pod <span class="string">'AppOrderFiles'</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line">post_install <span class="keyword">do</span> <span class="params">|installer|</span></span><br><span class="line">   installer.pods_project.targets.each <span class="keyword">do</span> <span class="params">|target|</span></span><br><span class="line">       target.build_configurations.each <span class="keyword">do</span> <span class="params">|config|</span></span><br><span class="line">           config.build_settings[<span class="string">'OTHER_CFLAGS'</span>] = <span class="string">'$(inherited) -fsanitize-coverage=func,trace-pc-guard'</span></span><br><span class="line">           config.build_settings[<span class="string">'OTHER_SWIFT_FLAGS'</span>] = <span class="string">'$(inherited) -sanitize-coverage=func -sanitize=undefined'</span></span><br><span class="line">       <span class="keyword">end</span></span><br><span class="line">   <span class="keyword">end</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure><p>执行<code>pod install</code>后，在<code>AppDelegate</code>中的<code>didFinishLaunchingWithOptions</code>方法中，加入以下代码:</p><figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">AppOrderFiles(^(<span class="built_in">NSString</span> *orderFilePath) &#123;</span><br><span class="line">    <span class="built_in">NSLog</span>(<span class="string">@"OrderFilePath:%@"</span>, orderFilePath);</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure><p>运行应用在设备中，当第一屏启动完成了。order file文件写入<code>orderFilePath</code>目录中。现在只需要从设备中取出order file拷贝到工程目录下，然后在Xcode的<code>Build Settings</code>中搜索<code>Order File</code>选项，设置值为<code>${SRCROOT}/app.order</code>。<br>至此大功告成，最后再去掉AppOrderFiles相关的代码。</p><h1 id="查看效果"><a href="#查看效果" class="headerlink" title="查看效果"></a>查看效果</h1><p>打开<code>Instruments</code>调试工具，选择<code>System Trace</code>，点击左上角的按钮开始收集数据。当数据收集完成后（一般在第一屏显示完成后），点击左上角的按钮停止收集数据，等待数据分析完成。<br>再从分析完成的列表中，选中<code>Main Thread</code>，再从左下方的二级菜单中选择<code>Summary: Virtual Memory</code>，查看其中<code>File Backed Page In</code>的值。这个值就是Page Fault的次数。</p>]]></content>
+    
+    <summary type="html">
+    
+      
+      
+        &lt;h1 id=&quot;背景&quot;&gt;&lt;a href=&quot;#背景&quot; class=&quot;headerlink&quot; title=&quot;背景&quot;&gt;&lt;/a&gt;背景&lt;/h1&gt;&lt;p&gt;启动是App给用户的第一印象，对用户体验至关重要。随着业务迭代迅速，如果放任不管，启动速度会一点点劣化。除了传统的修改业务代码方式，发现修改
+      
+    
+    </summary>
+    
+    
+      <category term="iOS" scheme="https://wkcdeie.github.io/categories/iOS/"/>
+    
+    
+      <category term="Instruments" scheme="https://wkcdeie.github.io/tags/Instruments/"/>
+    
+      <category term="CocoaPods" scheme="https://wkcdeie.github.io/tags/CocoaPods/"/>
+    
+  </entry>
   
   <entry>
     <title>iOS组件二进制化</title>
