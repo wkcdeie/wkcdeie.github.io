@@ -100,6 +100,33 @@
       </tags>
   </entry>
   <entry>
+    <title>Dart函数防抖与节流</title>
+    <url>/Dart/function-debounce-throttle/</url>
+    <content><![CDATA[<h1 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h1><h2 id="函数防抖-debounce"><a href="#函数防抖-debounce" class="headerlink" title="函数防抖(debounce)"></a>函数防抖(debounce)</h2><blockquote>
+<p>就是指触发事件后在<code>n</code>秒内函数只能执行一次，如果在<code>n</code>秒内又触发了事件，则会重新计算函数执行时间。  </p>
+</blockquote>
+<p>常用于实时搜索</p>
+<h2 id="函数节流-throttle"><a href="#函数节流-throttle" class="headerlink" title="函数节流(throttle)"></a>函数节流(throttle)</h2><blockquote>
+<p>限制一个函数在某个时间段内只能执行一次。  </p>
+</blockquote>
+<p>常用于按钮重复提交</p>
+<h1 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h1><h2 id="debounce"><a href="#debounce" class="headerlink" title="debounce"></a>debounce</h2><figure class="highlight dart"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> <span class="string">&#x27;dart:async&#x27;</span>;</span><br><span class="line"></span><br><span class="line"><span class="built_in">Map</span>&lt;<span class="built_in">String</span>, Timer&gt; _funcDebounce = &#123;&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// <span class="markdown">函数防抖</span></span></span><br><span class="line"><span class="comment">/// <span class="markdown">[<span class="symbol">func</span>]: <span class="link">要执行的方法</span></span></span></span><br><span class="line"><span class="comment">/// <span class="markdown">[<span class="symbol">milliseconds</span>]: <span class="link">要迟延的毫秒时间</span></span></span></span><br><span class="line"><span class="built_in">Function</span> debounce(<span class="built_in">Function</span> func, [<span class="built_in">int</span> milliseconds = <span class="number">500</span>]) &#123;</span><br><span class="line">  <span class="keyword">assert</span>(func != <span class="keyword">null</span>);</span><br><span class="line">  <span class="built_in">Function</span> target = () &#123;</span><br><span class="line">    <span class="built_in">String</span> key = func.hashCode.toString();</span><br><span class="line">    Timer _timer = _funcDebounce[key];</span><br><span class="line">    <span class="keyword">if</span> (_timer == <span class="keyword">null</span>) &#123;</span><br><span class="line">      func?.call();</span><br><span class="line">      _timer = Timer(<span class="built_in">Duration</span>(milliseconds: milliseconds), () &#123;</span><br><span class="line">        Timer t = _funcDebounce.remove(key);</span><br><span class="line">        t?.cancel();</span><br><span class="line">        t = <span class="keyword">null</span>;</span><br><span class="line">      &#125;);</span><br><span class="line">      _funcDebounce[key] = _timer;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;;</span><br><span class="line">  <span class="keyword">return</span> target;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>调用:  </p>
+<figure class="highlight dart"><table><tr><td class="code"><pre><span class="line"><span class="keyword">void</span> onSearch() &#123;&#125;</span><br><span class="line"></span><br><span class="line">debounce(onSearch, <span class="number">1000</span>)();</span><br></pre></td></tr></table></figure>
+
+<h2 id="throttle"><a href="#throttle" class="headerlink" title="throttle"></a>throttle</h2><figure class="highlight dart"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> <span class="string">&#x27;dart:async&#x27;</span>;</span><br><span class="line"></span><br><span class="line"><span class="built_in">Map</span>&lt;<span class="built_in">String</span>, <span class="built_in">bool</span>&gt; _funcThrottle = &#123;&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// <span class="markdown">函数节流</span></span></span><br><span class="line"><span class="comment">/// <span class="markdown">[<span class="symbol">func</span>]: <span class="link">要执行的方法</span></span></span></span><br><span class="line"><span class="built_in">Function</span> throttle(Future <span class="built_in">Function</span>() func) &#123;</span><br><span class="line">  <span class="keyword">if</span> (func == <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> func;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="built_in">Function</span> target = () &#123;</span><br><span class="line">    <span class="built_in">String</span> key = func.hashCode.toString();</span><br><span class="line">    <span class="built_in">bool</span> _enable = _funcThrottle[key] ?? <span class="keyword">true</span>;</span><br><span class="line">    <span class="keyword">if</span> (_enable) &#123;</span><br><span class="line">      _funcThrottle[key] = <span class="keyword">false</span>;</span><br><span class="line">      func().then((_) &#123;</span><br><span class="line">        _funcThrottle[key] = <span class="keyword">false</span>;</span><br><span class="line">      &#125;).whenComplete(() &#123;</span><br><span class="line">        _funcThrottle.remove(key);</span><br><span class="line">      &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;;</span><br><span class="line">  <span class="keyword">return</span> target;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>调用:  </p>
+<figure class="highlight dart"><table><tr><td class="code"><pre><span class="line">Future&lt;<span class="keyword">void</span>&gt; onSubmit() <span class="keyword">async</span> &#123;&#125;</span><br><span class="line"></span><br><span class="line">throttle(onSubmit)();</span><br></pre></td></tr></table></figure>]]></content>
+      <categories>
+        <category>Dart</category>
+      </categories>
+      <tags>
+        <tag>函数</tag>
+        <tag>防抖</tag>
+        <tag>节流</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>iOS二进制重排</title>
     <url>/iOS/iOS-binary-rearrangement/</url>
     <content><![CDATA[<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>启动是App给用户的第一印象，对用户体验至关重要。随着业务迭代迅速，如果放任不管，启动速度会一点点劣化。除了传统的修改业务代码方式，发现修改代码在二进制文件的布局可以提高启动性能。</p>
